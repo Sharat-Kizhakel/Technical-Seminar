@@ -1,0 +1,332 @@
+
+\documentclass[12pt]{article}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\graphicspath{{images/}}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,citecolor=blue,urlcolor=blue,linkcolor=blue}
+
+\title{An in-depth practical examination of SQL Injection attacks and Prevention techniques}
+\author{by: Sharat Prasad Kizhakel\\assignment: Technical Seminar IV sem\\usn:1BM19CS074\\sec:4-B}
+\date{5th June 2021}
+\begin{document}
+\maketitle
+\newpage
+\begin{abstract}
+\begin{flushleft}
+Preserving potentially sensitive data from any kind of attacks is a necessity in any web applications. SQL injections exploit poorly designed web applications by 'injecting' a malicious query via the client to the application when there is non-validated input. This can result in unauthorized access to sensitive data. Ever since its inception two decades before, OWASP still lists injections in the top 10 application vulnerabilities list as of 2021. SQL injections are still an active threat particularly for PHP applications. In this paper I have provided an examination of the underlying principle of an SQL Injection attack, their various types and have concluded with a note of several exisiting defense techniques that can be used to prevent the same. The last section has taken into account some novel approaches for SQLIA defense, from exisiting papers on the topic.  
+\end{flushleft}
+\end{abstract}
+\clearpage
+\tableofcontents
+\clearpage
+\section{Introduction}
+There are many types of SQL injection,however majority involve an attacker inserting arbitrary SQL into a web application database query. The simplest form of SQL injection is through user input. Web applications typically accept user input through a form, and the front end passes the user input to the back-end database for processing. If the web application fails to sanitize user input, then the attacker can inject SQL query of their choice into the back-end database and cause loss in confidentiality,integrity and authority \cite{kindy2011survey}
+ of the database. Another method of SQLIA is modifying cookies to poison a web application's database query. Cookies store client data locally, and web applications commonly load cookies and process that information. A malicious user can be used to modify cookies to inject SQL into the database.Server variables such as HTTP headers are also used as a SQL injection attack vector. 
+The cause of SQL attack is mostly: no proper validation for user input. To find a solution for this problem, various coding guidelines have been proposed such as validation and encoding of the user input. These techniques are implemented by humans, so it 
+is also prone to error \cite{clarke2009sql}. The basic nature of an SQLIA has been shown in the code snippet below \cite{jana2020code}:
+\begin{lstlisting}[caption=SQLIA classic bypass,language=SQL,showspaces=false,
+           showstringspaces=false,
+           basicstyle=\ttfamily\small,
+           numbers=left,
+           numberstyle=\tiny,
+           label=sql code,
+           commentstyle=\color{green!60},
+           breaklines=true,backgroundcolor=\color{lightgray}]
+//Database connection
+con = mysql connect(“localhost",“uname",“pass");
+//Dynamically generating SQL query with user input Q=“SELECT * FROM item WHERE cost < ‘$
+GET[“val"]’ "."ORDER BY itemDescription";
+//Executing the query against the database
+ResultSet rs = con.executeQuery($Q);
+The URL “http://www.altoromutual.com/item.php?val=1000”
+In this case the data is in the body of the user request i.e \$dollar
+When user provides malicious input 1000’ OR  ‘1’=‘1
+and the corresponding URL http://www.altoromutual.com/item
+.php?val= ‘1000’ OR  ‘1’=‘1’, the dynamically generated
+SQL query is actually “SELECT * FROM item WHERE price < ‘1000’
+OR  ‘1’=‘1’ ORDER BY itemDescription”// this query will return all details of the given database since 1=1 is a universal truth irrespective of the other condition. This is called tautology-based SQLIA.Depending on
+the different intention, user could provide even more malicious input like:
+’; DROP TABLE item -- and the dynamically constructedstructed SQL query “SELECT * FROM item WHERE
+price < ‘ ’ ; DROP TABLE item -- ORDER BY itemDescription” //deletes the ’item’ table from the database since the input string has been closed at the beginning itself and the text after it is ignored by '--'.
+\end{lstlisting}
+However, the main cause of this attack is the effect of direct involvement of code into parameters which are concatenated with SQL
+statements and will execute. Therefore,an effective and efficient knowledge and techniques to detect and prevent SQLIA are needed [figure \ref{fig_1}].
+
+\begin{figure}[h]
+\centering
+\includegraphics[scale=1]{sqli_1.jpg}
+\caption{SQL Injection Attack}
+\label{fig_1}
+\end{figure}
+\newpage
+\section{SQL Injection overview}
+\subsection{Brief working}
+A SQL injection attack is when a third party is able to use SQL commands to interfere with back-end databases in ways that they shouldn't be allowed to. This is generally the result of websites directly incorporating user-inputted text into a SQL query and then running that query against a database. How this works in a non-malicious context is that the user-inputted text is used to search the database - for example, logging in to a specific account by matching it based on the username and password entered by the user.
+The mechanism differs based on the types of SQL injection attacks \cite{ma2019research}:
+1) One principle is to insert the code directly into the user input variables which are then concatenated with the SQL command and executed. This is as shown in the introduction[\ref{sql code}]. Since here the attack is directly bound with SQL 
+statements, it is also called direct injection attack method.
+2) The second attack injects malicious code into strings to be stored in tables or as original documents. The stored string is connected to a dynamic SQL command to execute some malicious SQL 
+code. 
+The injection process works by terminating the text 
+string ahead of time and then appending a new command. 
+
+\begin{figure}[h]
+\centering
+\includegraphics[scale=0.5]{sqli_2.png}
+\caption{SQL Injection Attack mechanism}
+\label{fig_2}
+\end{figure}
+\newpage
+\subsection{Types of SQL Injection attacks}
+SQL injection attacks are classified under mainly under seven 
+categories \cite{chen2019research}:
+•\textbf{Tautologies}:SQL injection queries are injected into one 
+or more conditional statements so that they 
+always evaluate to true.\\
+•\textbf{Illegal/Logically Incorrect Queries}:Using error messages rejected by the 
+database to find useful data facilitating 
+injection of the backend database. It comes under in-band SQLi.
+\\
+•\textbf{Union Query}:Injected query is joined with a safe query 
+using the keyword UNION in order to get 
+information related to other tables from the 
+application. It comes under in-band SQLi.\\
+•\textbf{Piggy-Backed Queries}:Many databases have built-in stored procedures. The attacker executes these built-in functions using malicious SQL Injection codes.\\ 
+•\textbf{Stored Procedures}:Additional malicious queries are inserted into an original injected query.\\
+•\textbf{Inferential}:In inferential SQLi attacker derives logical conclusions from the answer to a true/false question 
+concerning the database.\\
+i.\emph{Blind Injection}:
+Information is collected by inferring from the replies of the page after questioning the server true/false questions.\\
+ii.\emph{Timing Attacks}:
+An attacker collects information by observing the response time (behavior) of the database which is set differently based on true or false.\\ 
+•\textbf{Alternate Encodings}:It aims to avoid being identified by secure defensive coding and automated prevention mechanisms. Hence, it helps the attackers to evade detection. It is usually combined with other attack techniques.\\
+\newpage
+\section{In-band SQLi(Classic SQLi)}
+Classic or basic SQL injection attacks are the simplest and most frequently used form of SQLi. These classic or simple SQL injection attacks may occur when users are permitted to submit a SQL statement to a SQL database.
+
+\newpage
+\subsection{Classic injection Bypass(no security controls)}
+In this type of attack its very basic payload we use a tautology and try to detect the character for which error is generated. Based on that we brute force different payloads till we get the right one. Line comments are used to ignore rest of the query so that syntax doesn't become an issue.\\
+\includegraphics[scale=1]{tech_1.png}
+\centering
+\caption{Database details}
+\label{fig_3}
+\clearpage
+\end{figure}
+\\
+\\
+\\
+\includegraphics[scale=0.4,height=6cm]{tech_2.png}
+\centering
+\caption{classic SQLi bypass}
+\label{fig_4}
+\end{figure}
+\\
+\\
+\includegraphics[scale=1]{tech_3.png}
+\centering
+\caption{Different query possibilities}
+\label{fig_5}
+\end{figure}
+\new page
+\clearpage
+\subsection{Union-based SQLi}
+begin{flushleft}
+When an application is vulnerable to SQL injection and the results of the query are returned within the application’s responses, then one possibility is that the UNION keyword can be used to retrieve data from other tables within the database. This results in an SQL injection UNION attack. For a UNION query to be used, the two key requirements that are needed are:\\
+1.The individual queries must return the same number of columns.
+\\
+2.The data types in each column must be compatible with the individual queries.
+\\
+Basically Union-based SQLi is an in-band SQL injection technique that leverages the UNION SQL operator to combine the results of two or more SELECT statements into a single result which is then returned as part of the HTTP response.
+end{flushleft}
+\\
+\includegraphics[scale=1]{tech_4.png}
+\centering
+\caption{Union based SQLi}
+\label{fig_6}
+\end{figure}
+\includegraphics[scale=1]{tech_5.png}
+\centering
+\caption{Union based SQLi using order by}
+\label{fig_7}
+\end{figure}
+\includegraphics[scale=1]{tech_6.png}
+\centering
+\caption{the databases present}
+\label{fig_8}
+\end{figure}
+\includegraphics[scale=1]{tech_7.png}
+\centering
+\caption{brute forcing the number of columns using order by}
+\label{fig_9}
+\end{figure}
+\includegraphics[scale=1]{tech_8.png}
+\centering
+\caption{getting user data}
+\label{fig_10}
+\end{figure}
+\includegraphics[scale=1]{tech_9.png}
+\centering
+\caption{getting user other user data}
+\label{fig_11}
+\end{figure}
+\newpage
+\subsection{Error-Based SQli}
+\begin{flushleft}
+Error-based SQLi is an in-band SQL Injection technique that relies on error messages thrown by the database server to obtain information about the structure of the database. In some cases, error-based SQL injection alone is enough for an attacker to enumerate an entire database. While errors are very useful during the development phase of a web application, they should be disabled on a live site or logged to a file with restricted access instead. The error messages can be used to return the full query results, or gain information on how to restructure the query for further exploitation.
+\end{flushleft}
+\includegraphics[scale=1]{tech_10.png}[h]
+\centering
+\caption{Duplicate entry error}
+\label{fig_13}
+\end{figure}
+\includegraphics[scale=1]{tech_11.png}
+\centering
+\caption{query demo on local database}
+\label{fig_14}
+\end{figure}
+\section{Inferential SQLi(Blind SQLi)}
+\begin{flushleft}
+Inferential SQL Injection, unlike in-band SQLi, may take longer for an attacker to exploit, however, it is just as dangerous as any other form of SQL Injection. In an inferential SQLi attack, no data is actually transferred via the web application and the attacker would not be able to see the result of an attack in-band. This is the reason they are called blind SQLi attacks. Instead, an attacker is able to reconstruct the database structure by sending payloads, observing the web application’s response and the resulting behavior of the database server.With blind SQL injection vulnerabilities, many techniques such as UNION attacks are not effective, because they rely on being able to see the results of the injected query within the application’s responses. It is still possible to exploit blind SQL injection to access unauthorized data, but different techniques must be used.
+\end{flushleft}
+\subsection{boolean-based blind SQLi}
+\begin{flushleft}
+Boolean-based SQL Injection is an inferential SQL Injection technique that relies on sending an SQL query to the database which forces the application to return a different result depending on whether the query returns a TRUE or FALSE result.
+Depending on the result, the content within the HTTP response will change or remain the same. It is this that allows an attacker to infer if the payload used returned true or false, even though no data from the database is returned unlike in other attacks. This attack is typically slow particularly in large databases, since an attacker would need to enumerate a database, character by character.
+\end{flushleft}
+\\
+\includegraphics[scale=1]{tech_12.png}
+\centering
+\caption{demo on local database}
+\label{fig_15}
+\end{figure}
+\includegraphics[scale=0.8]{tech_13.png}
+\centering
+\caption{page loading on true condition}
+\label{fig_16}
+\end{figure}
+\newpage
+\subsection{Time-based blind SQLi}
+\begin{flushleft}
+Time-based SQL Injection is an inferential SQL Injection technique that relies on sending an SQL query to the database which forces the database to wait for a specified amount of time (in seconds) before responding. The response time will indicate to the attacker whether the result of the query is TRUE or FALSE.Depending on the result, an HTTP response will be returned with a delay, or returned immediately. This allows an attacker to infer if the payload used returned true or false, even though no data from the database is returned. Because SQL queries are generally processed synchronously by the application, delaying the execution of an SQL query will also delay the HTTP response. This allows us to infer the truth of the injected condition based on the time taken before the HTTP response is received.
+\end{flushleft}
+\\
+\includegraphics[scale=1]{ttech_1.png}
+\centering
+\caption{not loading false condition}
+\\
+\label{fig_17}
+\end{figure}\\
+\includegraphics[scale=0.8]{ttech_2.png}
+\centering
+\caption{both true and false execution times on db}
+\label{fig_18}
+\end{figure}
+\newpage
+\section{Out-of-band SQLi}
+\begin{flushleft}
+Out-of-band SQL Injection is not very common, mostly because it depends on features being enabled on the database server being used by the web application. Out-of-band SQL Injection occurs when an attacker is unable to use the same channel to launch the attack and gather results.Out-of-band techniques, offer an attacker an alternative to inferential time-based techniques, especially if the server responses are not very stable (making an inferential time-based attack unreliable).Out-of-band SQLi techniques would rely on the database server’s ability to make DNS or HTTP requests to deliver data to an attacker. Such is the case with Microsoft SQL Server’s command.
+\end{flushleft}
+\\
+\\
+\includegraphics[scale=0.3]{out_of_band.jpeg}
+\centering
+\caption{Out of Band SQLi}
+\label{fig_19}
+\end{figure}
+\newpage
+\section{Semi-automated tool for SQL Injection}
+\begin{flushleft}
+It can be a time consuming process to manually check various payloads in the attack query. Different permutations of the same will be possible depending on ' or " or different comment injections like '--','#','-- -' and even '/*'. Therefore instead of manually checking all the combinations, we can save the different possible payloads in a separate file which can then be uploaded on the intruder tab of Burp suite, an integrated platform for security testing. With the help of Burp suite we can directly get to know which payloads are successfull and which are not.
+\end{flushleft}
+\\
+\\
+\includegraphics[scale=0.8]{tttech1.png}
+\centering
+\caption{Payload using Burp Suite}
+\label{fig_20}
+\end{figure}
+\\
+\\
+\includegraphics[scale=0.8]{tttech2.png}
+\centering
+\caption{Testing output for different lengths}
+\label{fig_21}
+\end{figure}
+\includegraphics[scale=0.8]{tttech3.png}
+\\
+\\
+\centering
+\caption{Testing output for different lengths}
+\label{fig_22}
+\end{figure}
+\newpage
+\section{Prevention Techniques}
+\subsection{paramtereized Queries}
+\begin{flushleft}
+One of the most fundamental reasons for the SQL injection attack is the ability to dynamically construct the generated SQL statement and then send it to the database for execution\cite{chen2019research}. The attack occurs because the characters entered by the user are being executed as SQL instructions but to prevent them from being executed as SQL instructions, we can use parameterized query statements. Parametric queries are currently the most effective defense against SQL injection
+attacks. The main idea of a parameterized query statement is basically: First send the default SQL statement of the website to the database server for pre-compilation which will generate a template, and then send the template back to the web server. After that, the user’s input can only represent one parameter string, and can’t be constructed as a new SQL statement. This eliminates the user-entry characters being executed as SQL statements, thus directly eliminating SQL injection.
+\end{flushleft}
+\includegraphics[scale=0.8]{param_1.png}
+\centering
+\caption{normal backend with no parameterized queries}
+\label{fig_23}
+\end{figure}
+\includegraphics[scale=0.8]{param_2.png}
+\centering
+\caption{Query that is passed}
+\label{fig_24}
+\end{figure}
+\includegraphics[scale=0.8]{param_3.png}
+\centering
+\caption{backend with  parameterized queries}
+\label{fig_25}
+\end{figure}
+\includegraphics[scale=0.8]{param_4.png}
+\centering
+\caption{creating a parameterized query object}
+\label{fig_26}
+\end{figure}
+\subsection{Stored Procedures}
+\begin{flushleft}
+Stored procedures are not always safe from SQL injection. However, certain standard stored procedure programming constructs have the same effect as the use of parameterized queries when implemented safely which is the norm for most stored procedure languages.They require the developer to just build SQL statements with parameters which are automatically parameterized unless the developer does something largely out of the norm. The difference between prepared statements and stored procedures is that the SQL code for a stored procedure is defined and stored in the database itself, and then called from the application.
+\\
+\includegraphics[scale=0.8]{stored.png}
+\centering
+\caption{An example of stored procedure}
+\label{fig_27}
+\end{figure}
+\end{flushleft}
+\subsection{hexadecimal encoding}
+\begin{flushleft}
+SQL injection belongs to the first-order SQL injection, which means that the user input containing the attack payload is directly spliced into the dynamic SQL statement of the web application structure through the web input, so that the dynamic SQL statement is submitted to the database for execution and finally obtained unauthorized. Access technology, in which the attack load refers to the
+SQL statement that causes the original query logic of the SQL statement to be tampered with after being spliced by the SQL query, so as to implement the SQL statement that
+performs the illegal function.Second-order SQL injection is different from first-order SQL injection. The attack payload is injected into the WEB application and is not executed immediately to trigger the vulnerability. Instead, it is stored in the database and stored in the database when other operations are requested. The malicious code in the database will be retrieved and dynamically combined with the SQL statement of the WEB application into a new SQL statement to implement SQL injection attacks. There are also many defense methods for second-order SQL injection, but they are not completely defense. In order to be able to almost completely prevent or even solve the second-order SQL injection attack, we can use ASCII hexadecimal encoding (that Research on SQL Injection and Defense Technology 197is, use a 2-digit hexadecimal number to represent one character). The hexadecimal ASCII encoding of the string entered by the user prevents any executable SQL code from being inserted into the data, thus completely preventing the SQL injection attack.
+\end{flushleft}
+\subsection{Code based analysis-A novel approach}
+\begin{flushleft}
+Let K, A, S and N denote set of keywords, set of
+alphabets in the upper case and lower case, set of special
+characters and set of numbers form 0 to 9 respectively.
+Let M be the set of strings in the domain I = K ∪ A ∪ S
+∪ N. In particular, M is the set of all possible user inputs\cite{jana2020code}
+for the web applications on I. Let S
+1 = {z ∈ C | |z| = 1}
+and D1 = {z ∈ C | |z| < 1}.
+\end{flushleft}
+\\
+\includegraphics[scale=0.8]{math_sql.png}
+\centering
+\caption{code based analysis}
+\label{fig_28}
+\end{figure}
+\newpage
+\section{Acknowledgement}
+\begin{flushleft}
+I would like to thank my technical seminar in charge  Rajeshwari B.S. ma'am, for having successfully guided me through the working of this project and always being ready to help with any queries I had. The sources I have used while researching on the topic have been listed as corresponding citations. This seminar was a pursuit of my interest in the Database Management System subject. I have used LATEX typesetting software to give the presentation more of the appearance of a research paper.
+\end{flushleft}
+\bibliographystyle{IEEEtran}
+\bibliography{cit_1}
+\end{document}
